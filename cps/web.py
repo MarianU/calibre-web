@@ -206,6 +206,31 @@ def update_view():
         return "Invalid request", 400
     return "1", 200
 
+@web.route("/ajax/lastReadPosition/<int:book_id>/<book_format>", methods=['POST'])
+@user_login_required
+def set_last_read_position(book_id, book_format):
+    to_save = request.get_json()
+    last_read_possition = calibre_db.session.query(db.LastReadPosition)\
+            .filter(and_(db.LastReadPosition.user == str(current_user.name),
+                    db.LastReadPosition.book == book_id,
+                    db.LastReadPosition.format == book_format.upper(),
+                    db.LastReadPosition.device == 'calibre-web',
+                    )).first()
+
+    if not last_read_possition:
+        last_read_possition = db.LastReadPosition(
+            book=book_id,
+            format=book_format.upper(),
+            user=str(current_user.name),
+        )
+
+    last_read_possition.cfi = to_save['previousLocationCfi']
+    pos_frac = to_save['progress']
+
+    calibre_db.session.add(last_read_possition)
+    calibre_db.session.commit()
+    return "", 201
+
 
 '''
 @web.route("/ajax/getcomic/<int:book_id>/<book_format>/<int:page>")
@@ -1594,14 +1619,21 @@ def read_book(book_id, book_format):
 
     # check if book has a bookmark
     bookmark = None
+    last_read_possition = None
     if current_user.is_authenticated:
         bookmark = ub.session.query(ub.Bookmark).filter(and_(ub.Bookmark.user_id == int(current_user.id),
                                                              ub.Bookmark.book_id == book_id,
                                                              ub.Bookmark.format == book_format.upper())).first()
+        last_read_possition = calibre_db.session.query(db.LastReadPosition)\
+            .filter(and_(db.LastReadPosition.user == str(current_user.name),
+                    db.LastReadPosition.book == book_id,
+                    db.LastReadPosition.format == book_format.upper(),
+                    db.LastReadPosition.device == 'calibre-web',
+                    )).first()
     if book_format.lower() == "epub" or book_format.lower() == "kepub":
         log.debug("Start [k]epub reader for %d", book_id)
         return render_title_template('read.html', bookid=book_id, title=book.title, bookmark=bookmark,
-                                     book_format=book_format)
+                                     book_format=book_format, last_read_possition=last_read_possition)
     elif book_format.lower() == "pdf":
         log.debug("Start pdf reader for %d", book_id)
         return render_title_template('readpdf.html', pdffile=book_id, title=book.title)

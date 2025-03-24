@@ -12,8 +12,8 @@ function qFinished(callback){
 }
 
 function calculateProgress(){
-    let data=reader.rendition.location.end;
-    return Math.round(epub.locations.percentageFromCfi(data.cfi)*100);
+    let data=reader.rendition.location?.end;
+    return Math.round(epub.locations.percentageFromCfi(data?.cfi)*100);
 }
 
 // register new event emitter locationchange that fires on urlchange
@@ -52,3 +52,46 @@ qFinished(()=>{
     window.dispatchEvent(new Event('locationchange'))
 });
 })
+
+oldEPUBJSSaveSettings = EPUBJS.Reader.prototype.saveSettings;
+
+var previousStoredLocationCfi = "";
+
+EPUBJS.Reader.prototype.saveSettings = function() {
+    currentCfi = this.book && this.rendition.currentLocation().start.cfi || "";
+    if (previousStoredLocationCfi === currentCfi) {
+        return;
+    }
+
+    var csrftoken = $("input[name='csrf_token']").val();
+    previousStoredLocationCfi = currentCfi;
+
+    let data=reader.rendition.location?.end;
+    $.ajax(calibre.lastReadPositionUrl, {
+        method: "post",
+        contentType: "application/json; charset=utf-8",
+        data: JSON.stringify({
+            previousLocationCfi: currentCfi || "",
+            progress: epub.locations.percentageFromCfi(data?.cfi)
+        }),
+        headers: { "X-CSRFToken": csrftoken }
+    })
+    .fail(function (xhr, status, error) {
+        alert(error);
+    });
+
+    oldEPUBJSSaveSettings.call(reader);
+}
+
+// store reading possition every 5 minutes
+let interval = setInterval(function () {
+    EPUBJS.Reader.prototype.saveSettings.call(reader);
+}, 5 * 60 * 1000);
+
+if (calibre.lastReadPosition !== '') {
+    setTimeout(function() {
+        previousStoredLocationCfi = calibre.lastReadPosition;
+        reader.selectedRange(calibre.lastReadPosition);
+        reader.hashChanged();
+    }, 5000);
+}

@@ -103,13 +103,13 @@ class Identifiers(Base):
     val = Column(String(collation='NOCASE'), nullable=False)
     book = Column(Integer, ForeignKey('books.id'), nullable=False)
     amazon = {
-        "jp": "co.jp", 
-        "uk": "co.uk", 
-        "us": "com", 
-        "au": "com.au", 
-        "be": "com.be", 
-        "br": "com.br", 
-        "tr": "com.tr", 
+        "jp": "co.jp",
+        "uk": "co.uk",
+        "us": "com",
+        "au": "com.au",
+        "be": "com.be",
+        "br": "com.br",
+        "tr": "com.tr",
         "mx": "com.mx",
     }
 
@@ -351,6 +351,29 @@ class Publishers(Base):
 
     def __repr__(self):
         return "<Publishers('{0},{1}')>".format(self.name, self.sort)
+
+
+class LastReadPosition(Base):
+    __tablename__ = 'last_read_positions'
+
+    id = Column(Integer, primary_key=True)
+    book = Column(Integer, ForeignKey('books.id'), nullable=False, unique=True)
+    format = Column(String(collation='NOCASE'), nullable=False)
+    user = Column(String(), nullable=False)
+    device = Column(String(), nullable=False)
+    cfi = Column(String(), nullable=False)
+    epoch = Column(Float(), nullable=False)
+    pos_frac = Column(Float(), nullable=False)
+
+    def __init__(self, book, format, user):
+        super().__init__()
+        self.book = book
+        self.format = format
+        self.user = user
+        self.device = 'calibre-web'
+        self.cfi = ''
+        self.epoch = 0
+        self.pos_frac = 0
 
 
 class Data(Base):

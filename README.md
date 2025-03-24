@@ -67,6 +67,7 @@ Calibre-Web is a web app that offers a clean and intuitive interface for browsin
 - Adds automatic user registration on oauth login (fixed roles list for users for now)
 - Adds environment variables support for a bunch of config parameters so that the instance can be bootstrapped without admin intervention (almost)
 - Adds possibility to disable normal login and will redirect to OAuth provider on access
+- Save reading position for ebooks in calibre database
 
 ## Installation
 
