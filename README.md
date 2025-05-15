@@ -12,17 +12,23 @@ Calibre-Web is a web app that offers a clean and intuitive interface for browsin
 <details>
 <summary><strong>Table of Contents</strong> (click to expand)</summary>
 
-1. [About](#calibre-web)
-2. [Features](#features)
-3. [Installation](#installation)
-   - [Installation via pip (recommended)](#installation-via-pip-recommended)
-   - [Quick start](#quick-start)
-   - [Requirements](#requirements)
-4. [Docker Images](#docker-images)
-5. [Troubleshooting](#troubleshooting)
-6. [Contributor Recognition](#contributor-recognition)
-7. [Contact](#contact)
-8. [Contributing to Calibre-Web](#contributing-to-calibre-web)
+- [Calibre-Web](#calibre-web)
+  - [Features](#features)
+    - [This fork](#this-fork)
+  - [Installation](#installation)
+    - [Installation via pip (recommended)](#installation-via-pip-recommended)
+    - [Important Links](#important-links)
+  - [Quick Start](#quick-start)
+  - [Requirements](#requirements)
+  - [Docker Images](#docker-images)
+    - [**LinuxServer - x64, aarch64**](#linuxserver---x64-aarch64)
+  - [Troubleshooting](#troubleshooting)
+  - [Contributor Recognition](#contributor-recognition)
+  - [Contact](#contact)
+  - [Contributing to Calibre-Web](#contributing-to-calibre-web)
+    - [Reporting Bugs](#reporting-bugs)
+    - [Feature Requests](#feature-requests)
+  - [Additional Resources](#additional-resources)
 
 </details>
 
@@ -54,6 +60,13 @@ Calibre-Web is a web app that offers a clean and intuitive interface for browsin
 - Self-update capability
 - "Magic Link" login for easy access on eReaders
 - LDAP, Google/GitHub OAuth, and proxy authentication support
+
+### This fork
+
+- Adds custom OAuth provider to be able to use Dex or Keycloak
+- Adds automatic user registration on oauth login (fixed roles list for users for now)
+- Adds environment variables support for a bunch of config parameters so that the instance can be bootstrapped without admin intervention (almost)
+- Adds possibility to disable normal login and will redirect to OAuth provider on access
 
 ## Installation
 
@@ -129,7 +142,7 @@ Pre-built Docker images are available:
 - **Optional Calibre layer**: [linuxserver/docker-mods](https://github.com/linuxserver/docker-mods/tree/universal-calibre)
 
 To include the Calibre `ebook-convert` binary (x64 only), add the environment variable:
-``` 
+```
 DOCKER_MODS=linuxserver/mods:universal-calibre
 ```
 in your Docker run/compose file. Omit this variable for a lightweight image.
@@ -140,13 +153,13 @@ in your Docker run/compose file. Omit this variable for a lightweight image.
 
 ## Troubleshooting
 
-- **Common Issues**: 
+- **Common Issues**:
    - If you experience issues starting the application, check the log files located in the `logs` directory for error messages.
    - If eBooks fail to load, verify that the `Location of Calibre database` is correctly set and that the database file is accessible.
 
 - **Configuration Errors**: Ensure that your Calibre database is compatible and properly formatted. Refer to the Calibre documentation for guidance on maintaining the database.
 
-- **Performance Problems**: 
+- **Performance Problems**:
    - If the application is slow, consider increasing the allocated resources (CPU/RAM) to your server or optimizing the Calibre database by removing duplicates and unnecessary entries.
    - Regularly clear the cache in your web browser to improve loading times.
 

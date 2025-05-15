@@ -49,13 +49,13 @@
         </select>
     </div>
     {% if registered_oauth.keys()| length > 0 and not new_user and profile %}
-      {% for id, name in registered_oauth.items() %}
+      {% for id, item in registered_oauth.items() %}
     <div class="form-group">
-      <label>{{ name }} {{_('OAuth Settings')}}</label>
+      <label>{{ item.display_name }} {{_('OAuth Settings')}}</label>
         {% if id not in oauth_status %}
-        <a href="{{ url_for('oauth.'+ name +'_login') }}" id="config_{{ id }}_oauth" class="btn btn-primary">{{_('Link')}}</a>
+        <a href="{{ url_for('oauth.'+ item.name +'_login') }}" id="config_{{ id }}_oauth" class="btn btn-primary">{{_('Link')}}</a>
         {% else %}
-        <a href="{{ url_for('oauth.'+ name +'_login_unlink') }}" id="config_{{ id }}_oauth" class="btn btn-primary">{{_('Unlink')}}</a>
+        <a href="{{ url_for('oauth.'+ item.name +'_login_unlink') }}" id="config_{{ id }}_oauth" class="btn btn-primary">{{_('Unlink')}}</a>
         {% endif %}
       {% endfor %}
     </div>

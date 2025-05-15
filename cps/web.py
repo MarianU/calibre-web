@@ -1204,7 +1204,7 @@ def serve_book(book_id, book_format, anyname):
         try:
             headers = Headers()
             headers["Content-Type"] = mimetypes.types_map.get('.' + book_format, "application/octet-stream")
-            if not range_header:                
+            if not range_header:
                 headers['Accept-Ranges'] = 'bytes'
             df = getFileFromEbooksFolder(book.path, data.name + "." + book_format)
             return do_gdrive_download(df, headers, (book_format.upper() == 'TXT'))
@@ -1369,6 +1369,11 @@ def render_login(username="", password=""):
 
 @web.route('/login', methods=['GET'])
 def login():
+    try:
+        if os.getenv('CALIBREWEB_INTERNAL_LOGIN_DISABLE') == 'true' and os.getenv('CALIBREWEB_DEFAULT_OAUTH_PROVIDER'):
+            return redirect(url_for('{}.login'.format(os.getenv('CALIBREWEB_DEFAULT_OAUTH_PROVIDER'))))
+    except:
+        pass
     if current_user is not None and current_user.is_authenticated:
         return redirect(url_for('web.index'))
     if config.config_login_type == constants.LOGIN_LDAP and not services.ldap:
@@ -1381,6 +1386,13 @@ def login():
 @limiter.limit("40/day", key_func=lambda: strip_whitespaces(request.form.get('username', "")).lower())
 @limiter.limit("3/minute", key_func=lambda: strip_whitespaces(request.form.get('username', "")).lower())
 def login_post():
+    try:
+        if os.getenv('CALIBREWEB_INTERNAL_LOGIN_DISABLE') == 'true' and os.getenv('CALIBREWEB_DEFAULT_OAUTH_PROVIDER'):
+            url_for('{}.login'.format(os.getenv('CALIBREWEB_DEFAULT_OAUTH_PROVIDER')))
+            flash(_("Please wait one minute before next login"), category="error")
+            return redirect(url_for('web.index'))
+    except:
+        pass
     form = request.form.to_dict()
     username = strip_whitespaces(form.get('username', "")).lower().replace("\n","").replace("\r","")
     try:

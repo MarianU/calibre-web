@@ -26,12 +26,13 @@ from functools import wraps
 from flask import session, request, make_response, abort
 from flask import Blueprint, flash, redirect, url_for
 from flask_babel import gettext as _
-from flask_dance.consumer import oauth_authorized, oauth_error
+from flask_dance.consumer import oauth_authorized, oauth_error, OAuth2ConsumerBlueprint
 from flask_dance.contrib.github import make_github_blueprint, github
 from flask_dance.contrib.google import make_google_blueprint, google
 from oauthlib.oauth2 import TokenExpiredError, InvalidGrantError
 from .cw_login import login_user, current_user
 from sqlalchemy.orm.exc import NoResultFound
+from os import getenv
 from .usermanagement import user_login_required
 
 from . import constants, logger, config, app, ub
@@ -63,8 +64,8 @@ def oauth_required(f):
     return inner
 
 
-def register_oauth_blueprint(cid, show_name):
-    oauth_check[cid] = show_name
+def register_oauth_blueprint(cid, name, display_name):
+    oauth_check[cid] = dict(name=name, display_name=display_name)
 
 
 def register_user_with_oauth(user=None):
@@ -195,12 +196,12 @@ def unlink_oauth(provider):
                 ub.session.delete(oauth_entry)
                 ub.session.commit()
                 logout_oauth_user()
-                flash(_("Unlink to %(oauth)s Succeeded", oauth=oauth_check[provider]), category="success")
-                log.info("Unlink to {} Succeeded".format(oauth_check[provider]))
+                flash(_("Unlink to %(oauth)s Succeeded", oauth=oauth_check[provider]['display_name']), category="success")
+                log.info("Unlink to {} Succeeded".format(oauth_check[provider]['display_name']))
             except Exception as ex:
                 log.error_or_exception(ex)
                 ub.session.rollback()
-                flash(_("Unlink to %(oauth)s Failed", oauth=oauth_check[provider]), category="error")
+                flash(_("Unlink to %(oauth)s Failed", oauth=oauth_check[provider]['display_name']), category="error")
     except NoResultFound:
         log.warning("oauth %s for user %d not found", provider, current_user.id)
         flash(_("Not Linked to %(oauth)s", oauth=provider), category="error")
@@ -209,7 +210,7 @@ def unlink_oauth(provider):
 
 def generate_oauth_blueprints():
     if not ub.session.query(ub.OAuthProvider).count():
-        for provider in ("github", "google"):
+        for provider in ("github", "google", "custom"):
             oauthProvider = ub.OAuthProvider()
             oauthProvider.provider_name = provider
             oauthProvider.active = False
@@ -217,14 +218,14 @@ def generate_oauth_blueprints():
             ub.session_commit("{} Blueprint Created".format(provider))
 
     oauth_ids = ub.session.query(ub.OAuthProvider).all()
-    ele1 = dict(provider_name='github',
+    ele1 = dict(provider_name='github', display_name='github',
                 id=oauth_ids[0].id,
                 active=oauth_ids[0].active,
                 oauth_client_id=oauth_ids[0].oauth_client_id,
                 scope=None,
                 oauth_client_secret=oauth_ids[0].oauth_client_secret,
                 obtain_link='https://github.com/settings/developers')
-    ele2 = dict(provider_name='google',
+    ele2 = dict(provider_name='google', display_name='google',
                 id=oauth_ids[1].id,
                 active=oauth_ids[1].active,
                 scope=["https://www.googleapis.com/auth/userinfo.email"],
@@ -234,23 +235,59 @@ def generate_oauth_blueprints():
     oauthblueprints.append(ele1)
     oauthblueprints.append(ele2)
 
+    if (
+            getenv('CALIBREWEB_CUSTOM_OAUTH') == 'true' and
+            getenv('CALIBREWEB_CUSTOM_OAUTH_SCOPE') and
+            getenv('CALIBREWEB_CUSTOM_OAUTH_CLIENT_ID') and
+            getenv('CALIBREWEB_CUSTOM_OAUTH_SECRET') and
+            getenv('CALIBREWEB_CUSTOM_OAUTH_BASEURL') and
+            getenv('CALIBREWEB_CUSTOM_OAUTH_TOKENURL') and
+            getenv('CALIBREWEB_CUSTOM_OAUTH_AUTHURL') and
+            getenv('CALIBREWEB_CUSTOM_USERINFO_PATH')
+        ):
+        ele3 = dict(provider_name="custom",
+                    name="custom",
+                    display_name=getenv('CALIBREWEB_CUSTOM_OAUTH_NAME', 'custom'),
+                    id=oauth_ids[2].id,
+                    active=True,
+                    scope=getenv('CALIBREWEB_CUSTOM_OAUTH_SCOPE').split(','),
+                    oauth_client_id=getenv('CALIBREWEB_CUSTOM_OAUTH_CLIENT_ID'),
+                    oauth_client_secret=getenv('CALIBREWEB_CUSTOM_OAUTH_SECRET'),
+                    oauth_base_url=getenv('CALIBREWEB_CUSTOM_OAUTH_BASEURL'),
+                    oauth_token_url=getenv('CALIBREWEB_CUSTOM_OAUTH_TOKENURL'),
+                    oauth_authorization_url=getenv('CALIBREWEB_CUSTOM_OAUTH_AUTHURL')
+                )
+        oauthblueprints.append(ele3)
     for element in oauthblueprints:
-        if element['provider_name'] == 'github':
-            blueprint_func = make_github_blueprint
+        if element['provider_name'] == 'custom':
+            blueprint = OAuth2ConsumerBlueprint(
+                element['name'], __name__,
+                client_id=element['oauth_client_id'],
+                client_secret=element['oauth_client_secret'],
+                base_url=element['oauth_base_url'],
+                scope=element['scope'],
+                token_url=element['oauth_token_url'],
+                authorization_url=element['oauth_authorization_url'],
+                redirect_to="oauth."+element['provider_name']+"_login",
+            )
         else:
-            blueprint_func = make_google_blueprint
-        blueprint = blueprint_func(
-            client_id=element['oauth_client_id'],
-            client_secret=element['oauth_client_secret'],
-            redirect_to="oauth."+element['provider_name']+"_login",
-            scope=element['scope']
-        )
+            if element['provider_name'] == 'github':
+                blueprint_func = make_github_blueprint
+            else:
+                blueprint_func = make_google_blueprint
+            blueprint = blueprint_func(
+                client_id=element['oauth_client_id'],
+                client_secret=element['oauth_client_secret'],
+                redirect_to="oauth."+element['provider_name']+"_login",
+                scope=element['scope']
+            )
+
         element['blueprint'] = blueprint
         element['blueprint'].backend = OAuthBackend(ub.OAuth, ub.session, str(element['id']),
                                                     user=current_user, user_required=True)
         app.register_blueprint(blueprint, url_prefix="/login")
         if element['active']:
-            register_oauth_blueprint(element['id'], element['provider_name'])
+            register_oauth_blueprint(element['id'], element['provider_name'], element['display_name'])
     return oauthblueprints
 
 
@@ -292,6 +329,60 @@ if ub.oauth_support:
         google_user_id = str(google_info["id"])
         return oauth_update_token(str(oauthblueprints[1]['id']), token, google_user_id)
 
+    if len(oauthblueprints) > 2:
+        @oauth_authorized.connect_via(oauthblueprints[2]['blueprint'])
+        def custom_logged_in(blueprint, token):
+            if not token:
+                flash(_("Failed to log in with Custom."), category="error")
+                log.error("Failed to log in with Custom")
+                return False
+
+            resp = blueprint.session.get(getenv('CALIBREWEB_CUSTOM_USERINFO_PATH'))
+            if not resp.ok:
+                flash(_("Failed to fetch user info from Custom."), category="error")
+                log.error("Failed to fetch user info from Custom")
+                return False
+
+            user_info = resp.json()
+            provider_id = str(oauthblueprints[2]['id'])
+            provider_user_id = str(user_info[getenv('CALIBREWEB_CUSTOM_USER_ID', 'sub')])
+            response = oauth_update_token(provider_id, token, provider_user_id)
+
+            if getenv('CALIBREWEB_CUSTOM_USER_AUTOREGISTER') == 'true':
+                # fetch session
+                query = ub.session.query(ub.OAuth).filter_by(
+                    provider=provider_id,
+                    provider_user_id=provider_user_id,
+                )
+                try:
+                    oauth_entry = query.one()
+                    if not oauth_entry.user_id:
+                        try:
+                            query = ub.session.query(ub.User).filter_by(
+                                email=str(user_info[getenv('CALIBREWEB_CUSTOM_USER_EMAIL', 'email')]),
+                            )
+                            new_user = query.one()
+                        except:
+                            new_user = ub.User(
+                                name=str(user_info[getenv('CALIBREWEB_CUSTOM_USER_NAME', 'name')]),
+                                email=str(user_info[getenv('CALIBREWEB_CUSTOM_USER_EMAIL', 'email')]),
+                                role=constants.ROLE_USER | constants.ROLE_DOWNLOAD | constants.ROLE_UPLOAD | constants.ROLE_EDIT | constants.ROLE_EDIT_SHELFS | constants.ROLE_VIEWER,
+                                password='*'
+                            )
+                        groups_name = getenv('CALIBREWEB_CUSTOM_USER_GROUPS', 'groups')
+                        admin_group_name = getenv('CALIBREWEB_CUSTOM_USER_ADMINS_GROUP', 'admins')
+                        if groups_name in user_info and admin_group_name in user_info[groups_name]:
+                            new_user.role |= constants.ROLE_ADMIN
+                        ub.session.add(new_user)
+                        ub.session_commit()
+                        ub.session.refresh(new_user)
+                        oauth_entry.user_id = new_user.id
+                        ub.session.add(oauth_entry)
+                        ub.session_commit()
+                except NoResultFound:
+                    pass
+
+            return response
 
 
     # notify on OAuth provider error
@@ -321,6 +412,19 @@ if ub.oauth_support:
         )  # ToDo: Translate
         flash(msg, category="error")
 
+    if len(oauthblueprints) > 2:
+        @oauth_error.connect_via(oauthblueprints[2]['blueprint'])
+        def custom_error(blueprint, error, error_description=None, error_uri=None):
+            msg = (
+                "OAuth error from {name}! "
+                "error={error} description={description} uri={uri}"
+            ).format(
+                name=blueprint.name,
+                error=error,
+                description=error_description,
+                uri=error_uri,
+            )  # ToDo: Translate
+            flash(msg, category="error")
 
 @oauth.route('/link/github')
 @oauth_required
@@ -368,3 +472,28 @@ def google_login():
 @user_login_required
 def google_login_unlink():
     return unlink_oauth(oauthblueprints[1]['id'])
+
+if len(oauthblueprints) > 2:
+    @oauth.route('/link/custom')
+    @oauth_required
+    def custom_login():
+        blueprint = oauthblueprints[2]['blueprint']
+        if not blueprint.session.authorized:
+            return redirect(url_for('custom.login'))
+        try:
+            resp = blueprint.session.get(getenv('CALIBREWEB_CUSTOM_USERINFO_PATH'))
+            if resp.ok:
+                account_info_json = resp.json()
+                return bind_oauth_or_register(oauthblueprints[2]['id'], account_info_json[getenv('CALIBREWEB_CUSTOM_USER_ID', 'sub')], 'custom.login', 'custom')
+            flash(_("Custom Oauth error, please retry later."), category="error")
+            log.error("Custom Oauth error, please retry later")
+        except (InvalidGrantError, TokenExpiredError) as e:
+            flash(_("Custom Oauth error: {}").format(e), category="error")
+            log.error(e)
+        return redirect(url_for('web.login'))
+
+
+    @oauth.route('/unlink/custom', methods=["GET"])
+    @user_login_required
+    def custom_login_unlink():
+        return unlink_oauth(oauthblueprints[2]['id'])

@@ -69,7 +69,7 @@ class _Settings(_Base):
     mail_server_type = Column(SmallInteger, default=0)
     mail_gmail_token = Column(JSON, default={})
 
-    config_calibre_dir = Column(String)
+    config_calibre_dir = Column(String, default=os.getenv('CALIBREWEB_CONFIG_DEFAULT_CALIBRE_DIR', ''))
     config_calibre_uuid = Column(String)
     config_calibre_split = Column(Boolean, default=False)
     config_calibre_split_dir = Column(String)
@@ -93,7 +93,7 @@ class _Settings(_Base):
     config_access_log = Column(SmallInteger, default=0)
     config_access_logfile = Column(String, default=logger.DEFAULT_ACCESS_LOG)
 
-    config_uploading = Column(SmallInteger, default=0)
+    config_uploading = Column(SmallInteger, default=os.getenv('CALIBREWEB_CONFIG_DEFAULT_UPLOADING', 0))
     config_anonbrowse = Column(SmallInteger, default=0)
     config_public_reg = Column(SmallInteger, default=0)
     config_remote_login = Column(Boolean, default=False)
@@ -118,7 +118,7 @@ class _Settings(_Base):
     config_use_goodreads = Column(Boolean, default=False)
     config_goodreads_api_key = Column(String)
     config_register_email = Column(Boolean, default=False)
-    config_login_type = Column(Integer, default=0)
+    config_login_type = Column(Integer, default=os.getenv('CALIBREWEB_CONFIG_DEFAULT_LOGIN_TYPE', 0))
 
     config_kobo_proxy = Column(Boolean, default=False)
 
@@ -352,7 +352,7 @@ class ConfigSQL(object):
             db_file = os.path.join(self.config_calibre_dir, 'metadata.db')
             have_metadata_db = os.path.isfile(db_file)
         self.db_configured = have_metadata_db
-        
+
         from . import cli_param
         if os.environ.get('FLASK_DEBUG'):
             logfile = logger.setup(logger.LOG_TO_STDOUT, logger.logging.DEBUG)
@@ -499,7 +499,7 @@ def autodetect_calibre_binaries():
             if all(values):
                 version = values[0].group(1)
                 log.debug("calibre version %s", version)
-                return element 
+                return element
     return ""
 
 
